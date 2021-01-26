@@ -1,6 +1,5 @@
 import os, sys
-sys.path.append(os.path.abspath(os.path.join(
-    '/home/liu/project/Clinic-Analysis/Scripts/Data_Process_Server', 'S2')))
+sys.path.append(os.path.abspath('/home/liu/project/adr-mining'))
 from os.path import join
 from utils._path import *
 

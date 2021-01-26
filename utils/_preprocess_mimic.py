@@ -6,8 +6,7 @@ import pandas as pd
 import numpy as np
 from os.path import join
 import sys
-sys.path.append(os.path.abspath(os.path.join(
-    '/home/liu/project/Clinic-Analysis/Scripts/Data_Process_Server', 'S2')))
+sys.path.append(os.path.abspath('/home/liu/project/adr-mining'))
 from term_process.mapping_dataset import get_mrconso_icd9_cui_df
 
 def to_datetime(pd_col,date_format="%Y-%m-%d %H:%M:%S"):

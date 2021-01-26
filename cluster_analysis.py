@@ -540,7 +540,70 @@ class feature_creation():
             print("# Episodes (MIMIC PRES^pres_diag_sider_matrix), J_d+1: {:d}, {:d}".format(*pres_diag_sider_matrix.shape))
             write2file(pres_diag_sider_matrix,join(result_path,("_").join(rxnorm_id)))
 
-    
+    def get_dissumary_drug_feature_newdis(self,feature_flag, group_cui, unique_flag=False):
+        epis_field="HADM_ID"
+        discharge_summary_file="/data/liu/mimic3/CLAMP_NER/input/RULE_BENCHMARK/ReRule_Discharge summary_Only_NORMAL_ALL"
+        result_prefix=join(singledrug_prefix,"NEWDIS_SIDER_DISCHARG")
+        create_folder(result_prefix)
+        result_prefix=join(result_prefix,self.rxnorm_id)
+        create_folder(result_prefix)
+        if(unique_flag):
+            result_prefix=join(result_prefix,"UNIQUE")
+        else:
+            result_prefix=join(result_prefix,"COMMON")
+        create_folder(result_prefix)
+
+        dissumary_df=read_data(discharge_summary_file, dtype=str)
+        epis_cluster_df_dict=dict(tuple(read_data(join(singledrug_prefix,\
+            self.rxnorm_id,\
+                get_feature_name(feature_flag),\
+                    "CLUSTER_label_C2"),dtype=str).groupby("LABEL")))
+
+        all_sd_cuis=list(set(group_cui[0]).union(set(group_cui[1])))
+        new_disease_matrix = read_data(
+            join(concat_clamp_prefix,"allepis_newCUI"),dtype={"HADM_ID":str}, usecols=[epis_field]+all_sd_cuis)
+
+        for cluster_id in epis_cluster_df_dict.keys():
+            result_path=join(result_prefix, "CLUSTER_%s"%cluster_id)
+            create_folder(result_prefix)
+            group_cluster=left_join(\
+                epis_cluster_df_dict[cluster_id][[epis_field]],\
+                    new_disease_matrix,epis_field).set_index(epis_field).loc[:,group_cui[0]]
+            for cui in group_cluster.columns:
+                print(cui)
+                result_final_path=join(result_path,"cui")
+                create_folder(result_final_path)
+                ds=group_cluster[cui].dropna()
+                print(ds)
+                treated_cui_epis=list(ds[ds>0].index)
+                print(len(treated_cui_epis))
+                print(len(dissumary_df.query('HADM_ID in @treated_cui_epis')))
+            # print(group_cluster.head())
+                quit()
+        # quit()
+        # group_0=left_join(epis_cluster_df["0"][[epis_field]],new_disease_matrix,epis_field)
+        # print(group_0.head())
+        # quit()
+        ds=group_0[epis_field]
+        print(ds)
+        ds=ds[ds>0]
+        print(len(ds))
+        print(ds)
+        print(len(dissumary_df.query('HADM_ID in @ds')))
+        # print(epis_cluster_df["1"]["C0008031"].head())
+
+
+def get_feature_name(feature_flag):
+    if feature_flag=="DS":
+        return "pres_diag_sider_matrix"
+    elif feature_flag=="EN":
+        return "dissum_autoencoder"
+    elif feature_flag=="ES":
+        return "five_autoencoder"
+    else:
+        return None
+
+
 
 def get_drugname_byrxcui_api(rxcui):
     # return None
@@ -954,7 +1017,7 @@ def concat_top_newdiseases(top_num=20):
             combined_df=read_data(join(sub_feature_path,combined_file))
             distinct_df=combined_df[combined_df["Common"]==False]
             unique_top_table_list=[]
-            all_top10_table_list=[]
+            all_top_table_list=[]
             for i in range(n_clusters):
                 unique_all_top_dfs=list(map(lambda df: df[[new_dis_code_field,cluster_field%i,new_dis_item_field_name]] \
                     .set_index(new_dis_code_field)\
@@ -967,10 +1030,11 @@ def concat_top_newdiseases(top_num=20):
                     left_join(df,get_side_effects_cui(drug_rxnorm),new_dis_code_field)\
                         for df in unique_all_top_dfs]
                 unique_top_table_list.append(unique_all_top_dfs[0])
-                all_top10_table_list.append(unique_all_top_dfs[1])
-            top_df_list.append(unique_top_table_list+all_top10_table_list)
-        # if(save_top20_newdis_2_latex):
-        rxnorm_dflists=zip(
+                all_top_table_list.append(unique_all_top_dfs[1])
+            top_df_list.append(unique_top_table_list+all_top_table_list)
+
+        # #if(save_top20_newdis_2_latex):
+        rxnormdf_lists=zip(
             drug_folders,
             list(map(get_drugname_byrxcui_api,drug_folders)),
             top_df_list
@@ -1024,14 +1088,14 @@ if __name__ == '__main__':
     # concat_plot_disease_sider(get_top_epis=False, dis_item="DISEASE_CUI", \
     #     matrix_path=join(dis_sider_intersection_path, "SINGLE_DRUG_DISEASE_CUI"))
     # -----------------------------------------------------------------
-    top_10_pairs_list=[["1658259","866924"],["1658259","1808219"],["1658259","885257"],["866924","885257"],\
-        ["866924","1808219"],["1658259","836358"],["866924","966571"],["1658259","966571"],["866924","836358"],["1658259","1724383"]]
-    # ## two drugs: disease
-    top_10_pairs = list(map(("_").join, top_10_pairs_list))
-    # fc = feature_creation('NONE')
-    # fc.extra_two_drugs_anaylsis(top_10_pairs_list,not_new_dis=True)
-    concat_plot_disease_sider(drug_folders=top_10_pairs, get_top_epis=True, dis_item="DISEASE_CUI", \
-        matrix_path=join(dis_sider_intersection_path, "DOUBLE_DRUG_DISEASE_CUI/1658259/"))
+    # top_10_pairs_list=[["1658259","866924"],["1658259","1808219"],["1658259","885257"],["866924","885257"],\
+    #     ["866924","1808219"],["1658259","836358"],["866924","966571"],["1658259","966571"],["866924","836358"],["1658259","1724383"]]
+    # # ## two drugs: disease
+    # top_10_pairs = list(map(("_").join, top_10_pairs_list))
+    # # fc = feature_creation('NONE')
+    # # fc.extra_two_drugs_anaylsis(top_10_pairs_list,not_new_dis=True)
+    # concat_plot_disease_sider(drug_folders=top_10_pairs, get_top_epis=True, dis_item="DISEASE_CUI", \
+    #     matrix_path=join(dis_sider_intersection_path, "DOUBLE_DRUG_DISEASE_CUI/1658259/"))
     # -----------------------------------------------------------------
     # dis_item="DISEASE_CUI"
     # for i in range(0,len(doc_drugs)):
@@ -1086,7 +1150,7 @@ if __name__ == '__main__':
 
     # SUP_STEP:check extracted section titles
 
-    
+    # ----------------------------------------------------------------- 
     # df=read_data(join("/data/liu/mimic3/CLAMP_NER/input",\
     #     "ReRule0_Discharge summary_All"))
     # print(df.TITLE.unique())
@@ -1095,7 +1159,7 @@ if __name__ == '__main__':
     # rxnorm_id = "197380"
     # print(get_item_args("DISEASE")['INDEX_FILE'])
 
-
+    # -----------------------------------------------------------------
     # # # NOTE: Get preliminary results
     # for rxnorm_id in ["1658259","866924","966571","885257","836358","855334",
         # "855290","1808219","1724383","1719291","1807516","213169","1659151"][1:2]:
@@ -1112,9 +1176,7 @@ if __name__ == '__main__':
         # fc.add_item_name_to_CATEGORY(cat_title="COMBINED")
     # concat_wasserstein_distance()
     # # NOTE: Get preliminary results
-
-
-
+    # -----------------------------------------------------------------
 
     # concat_top_newdiseases()
     # path=(join(singledrug_prefix,"drug_index_rxnorm_name"))
@@ -1122,7 +1184,12 @@ if __name__ == '__main__':
     # append_csv_byrow(["test1","test2","test3"],path)
 
     # # NOTE: supplement disease names
+    # -----------------------------------------------------------------
+    # STEP: get_dissumary_drug_feature_newdis
 
+    fc = feature_creation("866924")
+    fc.get_dissumary_drug_feature_newdis("DS",[["C0008031","C0039231","C0013404"],["C0008031","C0013404"]],False)
+    # -----------------------------------------------------------------
 
 
 
