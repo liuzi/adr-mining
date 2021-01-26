@@ -5,8 +5,7 @@ import numpy as np
 import pandas as pd
 import subprocess
 
-sys.path.append(os.path.abspath(os.path.join(
-    '/home/liu/project/Clinic-Analysis/Scripts/Data_Process_Server', 'S2')))
+sys.path.append(os.path.abspath('/home/liu/project/adr-mining'))
 from term_process.icd9_conversion import decimal_to_short
 # from icd9_conversion import decimal_to_short
 from utils._tools import *
@@ -106,9 +105,9 @@ def get_rxnsat_rxnorm_ndc_df():
 
 # mrconso_icd9_cui()
 
-pres_df = read_data(
-    join(read_prefix,'PRESCRIPTIONS'),
-    dtype={"NDC":str})[["NDC"]].dropna(subset=['NDC'])
-pres_df = pres_df[pres_df['NDC']!="0"].drop_duplicates()
-pres_df=pres_df.assign(NDC_LENGTH=pres_df["NDC"].apply(len))
-print(pres_df["NDC_LENGTH"].unique())
+# pres_df = read_data(
+#     join(read_prefix,'PRESCRIPTIONS'),
+#     dtype={"NDC":str})[["NDC"]].dropna(subset=['NDC'])
+# pres_df = pres_df[pres_df['NDC']!="0"].drop_duplicates()
+# pres_df=pres_df.assign(NDC_LENGTH=pres_df["NDC"].apply(len))
+# print(pres_df["NDC_LENGTH"].unique())
