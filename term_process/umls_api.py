@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import re
 from term_process.load_standard_dataset import load_sider_cid_cui_db
+import urllib.request 
+import xmltodict
 # from utils._tools import *
 
 sider_drug_file="/data/liu/mimic3/SIDER/drug_names.tsv"

@@ -541,9 +541,9 @@ class feature_creation():
             write2file(pres_diag_sider_matrix,join(result_path,("_").join(rxnorm_id)))
 
     def get_dissumary_drug_feature_newdis(self,feature_flag, group_cui, unique_flag=False):
-        epis_field="HADM_ID"
-        discharge_summary_file="/data/liu/mimic3/CLAMP_NER/input/RULE_BENCHMARK/ReRule_Discharge summary_Only_NORMAL_ALL"
-        result_prefix=join(singledrug_prefix,"NEWDIS_SIDER_DISCHARG")
+        epis_field, rank_field, dissum_field="HADM_ID", "GROUP_RANK", "TEXT"
+        discharge_summary_file="/data/liu/mimic3/CLAMP_NER/input/ReRule0_Discharge summary_All.csv"
+        result_prefix=join(singledrug_prefix,"NEWDIS_SIDER_DISCHARG",get_feature_name(feature_flag))
         create_folder(result_prefix)
         result_prefix=join(result_prefix,self.rxnorm_id)
         create_folder(result_prefix)
@@ -553,7 +553,9 @@ class feature_creation():
             result_prefix=join(result_prefix,"COMMON")
         create_folder(result_prefix)
 
-        dissumary_df=read_data(discharge_summary_file, dtype=str)
+        dissumary_df=read_data(discharge_summary_file, dtype=str,\
+            usecols=[epis_field, rank_field, dissum_field])
+
         epis_cluster_df_dict=dict(tuple(read_data(join(singledrug_prefix,\
             self.rxnorm_id,\
                 get_feature_name(feature_flag),\
@@ -561,35 +563,43 @@ class feature_creation():
 
         all_sd_cuis=list(set(group_cui[0]).union(set(group_cui[1])))
         new_disease_matrix = read_data(
-            join(concat_clamp_prefix,"allepis_newCUI"),dtype={"HADM_ID":str}, usecols=[epis_field]+all_sd_cuis)
+            join(concat_clamp_prefix,"allepis_newCUI"),dtype={"HADM_ID":str}, \
+                usecols=[epis_field]+all_sd_cuis)
 
         for cluster_id in epis_cluster_df_dict.keys():
             result_path=join(result_prefix, "CLUSTER_%s"%cluster_id)
-            create_folder(result_prefix)
+            create_folder(result_path)
             group_cluster=left_join(\
                 epis_cluster_df_dict[cluster_id][[epis_field]],\
-                    new_disease_matrix,epis_field).set_index(epis_field).loc[:,group_cui[0]]
+                    new_disease_matrix,epis_field).set_index(epis_field).loc[:,group_cui[int(cluster_id)]]
             for cui in group_cluster.columns:
                 print(cui)
-                result_final_path=join(result_path,"cui")
+                result_final_path=join(result_path,cui)
                 create_folder(result_final_path)
                 ds=group_cluster[cui].dropna()
-                print(ds)
+                # print(ds)
                 treated_cui_epis=list(ds[ds>0].index)
                 print(len(treated_cui_epis))
                 print(len(dissumary_df.query('HADM_ID in @treated_cui_epis')))
+                # print(dissumary_df.query('HADM_ID in @treated_cui_epis').head())
+                treated_cui_epis_dissummary=dissumary_df.query('HADM_ID in @treated_cui_epis')
+                treated_cui_epis_dissummary.apply(
+                    lambda row: write2txt(row[dissum_field],\
+                        join(result_final_path,"%s_%s"%(row[epis_field],row[rank_field]))), axis=1
+                )
+
             # print(group_cluster.head())
-                quit()
         # quit()
         # group_0=left_join(epis_cluster_df["0"][[epis_field]],new_disease_matrix,epis_field)
         # print(group_0.head())
         # quit()
-        ds=group_0[epis_field]
-        print(ds)
-        ds=ds[ds>0]
-        print(len(ds))
-        print(ds)
-        print(len(dissumary_df.query('HADM_ID in @ds')))
+        # ds=group_0[epis_field]
+        # print(ds)
+        # ds=ds[ds>0]
+        # print(len(ds))
+        # print(ds)
+        # print(len(dissumary_df.query('HADM_ID in @ds')))
+        # print(dissumary_df.query('HADM_ID in @ds').head())
         # print(epis_cluster_df["1"]["C0008031"].head())
 
 
@@ -1186,11 +1196,52 @@ if __name__ == '__main__':
     # # NOTE: supplement disease names
     # -----------------------------------------------------------------
     # STEP: get_dissumary_drug_feature_newdis
+    # # #NOTE:metropolol
+    # rxnorm_id="866924"
+    # group_newdis=[["C0008031","C0039231","C0013404"],["C0008031","C0013404"]]
+    # #NOTE:vancomycin
+    # rxnorm_id="1807516"
+    # group_newdis=[["C0015672"],[]]
+    # group_newdis=[["C0002871","C0013404","C0039231"],["C0002871","C0039231"]]
 
-    fc = feature_creation("866924")
-    fc.get_dissumary_drug_feature_newdis("DS",[["C0008031","C0039231","C0013404"],["C0008031","C0013404"]],False)
+    # #NOTE:furosemide
+    # rxnorm_id="1719291"
+    # group_newdis_unique=[[],["C0019151"]]
+    # group_newdis=[["C0002871"],["C0002871"]]
+    # feature_flag="DS"
+
+    # feature_flag="ES"
     # -----------------------------------------------------------------
+    # #NOTE:furosemide
+    # rxnorm_id="1719291"
+    # group_newdis_unique=[["C0000737","C0546884","C0009806"],[]]
+    # group_newdis=[["C0002871"],[]]
+    # # #NOTE:metropolol
+    # rxnorm_id="866924"
+    # group_newdis=[["C0008031","C0476273","C0039231"],["C0008031", "C0039231","C0013404"]]
+    # #NOTE:vancomycin
+    # rxnorm_id="1807516"
+    # group_newdis_unique=[["C0002871","C0039231","C0015967","C0013404"],[]]
+    # group_newdis=[["C0002871","C0039231"],["C0428977"]]
+    # feature_flag="EN"
 
+    # -----------------------------------------------------------------
+    # #NOTE:furosemide
+    # rxnorm_id="1719291"
+    # group_newdis_unique=[["C0000737","C0546884","C0009806"],[]]
+    # group_newdis=[["C0002871"],[]]
+    # # #NOTE:metropolol
+    # rxnorm_id="866924"
+    # group_newdis=[["C0008031","C0039231","C0013404"],["C0008031", "C0476273","C0039231"]]
+    # #NOTE:vancomycin
+    rxnorm_id="1807516"
+    group_newdis_unique=[["C0002871","C0039231","C0015967","C0013404"],[]]
+    group_newdis=[["C0002871","C0039231"],["C0428977"]]
+    feature_flag="ES"
+
+    fc = feature_creation(rxnorm_id)
+    fc.get_dissumary_drug_feature_newdis(feature_flag ,group_newdis_unique,True)
+    fc.get_dissumary_drug_feature_newdis(feature_flag,group_newdis)
 
 
 # def main():
