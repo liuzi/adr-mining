@@ -73,22 +73,22 @@ def print_patient_stats(df):
         print("# of %s: %d"%(col,len(df[col].unique())))
         # print("# of %s: %d"%len(df['HADM_ID'].unique()))
 
-def append_csv_byrow(row, file_name):
-    
+def append_csv_byrow(row, file_name,sep="\t"):
+    # NOTE: row:[]
     # Open file in append mode
     with open(csv_suffix(file_name), 'a+', newline='') as write_obj:
         # Create a writer object from csv module
-        csv_writer = writer(write_obj)
+        csv_writer = writer(write_obj,delimiter=sep )
         # Add contents of list as last row in the csv file
         csv_writer.writerow(row)
-        print("Insert row:\"%s\" into file %s"%(
-            row,df.shape[0],file_name))
+        # print("Insert row:\"%s\" into file %s"%(
+        #     row,df.shape[0],file_name))
 
 
-def append_csv_bydf(df, file_name):
+def append_csv_bydf(df, file_name, sep="\t"):
     
     # Open file in append mode
     with open(csv_suffix(file_name), 'a') as write_obj:
-        df.to_csv(write_obj, mode='a', header=write_obj.tell()==0)
+        df.to_csv(write_obj, mode='a', header=write_obj.tell()==0,sep=sep,index=False)
         print("Insert %d rows into file %s"%(
             df.shape[0],file_name))

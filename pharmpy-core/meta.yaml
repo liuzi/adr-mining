@@ -1,0 +1,86 @@
+{% set name = "pharmpy-core" %}
+{% set version = "0.16.0" %}
+
+package:
+  name: "{{ name|lower }}"
+  version: "{{ version }}"
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: bc8e89ccfe476599589400a05e35c444afd281e1caadd6b30853875f7886f09d
+
+build:
+  number: 0
+  entry_points:
+    - pharmpy             = pharmpy.__main__:run
+    - psn-pharmpy-wrapper = pharmpy.methods.psn_helpers:pharmpy_wrapper
+  script: "{{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv "
+
+requirements:
+  host:
+    - altair
+    - appdirs
+    - beautifulsoup4
+    - csscompressor
+    - dask
+    - lark-parser
+    - lxml
+    - networkx
+    - numexpr
+    - numpy
+    - pandas
+    - pip
+    - python
+    - scipy
+    - sphinx
+    - symengine
+    - sympy >=1.7
+  run:
+    - altair
+    - appdirs
+    - beautifulsoup4
+    - csscompressor
+    - dask
+    - lark-parser
+    - lxml
+    - networkx
+    - numexpr
+    - numpy
+    - pandas
+    - python
+    - scipy
+    - sphinx
+    - symengine
+    - sympy >=1.7
+
+test:
+  imports:
+    - pharmpy
+    - pharmpy.data
+    - pharmpy.methods
+    - pharmpy.methods.bootstrap
+    - pharmpy.methods.cdd
+    - pharmpy.methods.frem
+    - pharmpy.methods.linearize
+    - pharmpy.methods.modelfit
+    - pharmpy.methods.qa
+    - pharmpy.methods.scm
+    - pharmpy.methods.simfit
+    - pharmpy.modeling
+    - pharmpy.parse_utils
+  commands:
+    - pharmpy --help
+    - psn-pharmpy-wrapper --help
+
+about:
+  home: https://pharmpy.github.io
+  license: GNU Lesser General Public v3 (LGPLv3)
+  license_family: LGPL
+  license_file: 
+  summary: Pharmacometric modelling
+  doc_url: 
+  dev_url: 
+
+extra:
+  recipe-maintainers:
+    - your-github-id-here
