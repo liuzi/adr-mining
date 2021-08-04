@@ -178,12 +178,12 @@ def save_ndc_from_mimic_2mappingdta():
     # write2file(pres_df_ndc,join(product_ndc_file_path_prefix,"MIMIC_NDC"))
 
     # NOTE: get cleaned rxnorm_ndc dataframe
-    # rxnorm_ndc_df=read_data(
-    #     join(processed_map_prefix,"rxnorm_ndc_df"), usecols=["CUI_CODE","CODE"],dtype=str
-    # ).drop_duplicates()
-    # rxnorm_ndc_df.columns=["RXNORM","NDC"]
-    # write2file(rxnorm_ndc_df,join(processed_map_prefix,"only_rxnorm_ndc_df"))
-    # print(pres_df_ndc.head())
+    rxnorm_ndc_df=read_data(
+        join(processed_map_prefix,"rxnorm_ndc_df"), usecols=["CUI_CODE","CODE"],dtype=str
+    ).drop_duplicates()
+    rxnorm_ndc_df.columns=["RXNORM","NDC"]
+    write2file(rxnorm_ndc_df,join(processed_map_prefix,"only_rxnorm_ndc_df"))
+    print(pres_df_ndc.head())
     #------------------------------------------------------------------------------------------
 
     rxnorm_ndc_df=read_data(
@@ -222,7 +222,7 @@ def compare_mimic_package_ndc():
     # quit()
     # TODO: only count NDC number
     print(len(mimic_ndc))
-    # 4204
+    # 4203
     mimic_package_map=left_join(mimic_ndc,package_ndc,"NDC")
     # print(mimic_package_map.query('PRODUCTNDC.isnull()').head(20))
     print(len(mimic_package_map.dropna()))

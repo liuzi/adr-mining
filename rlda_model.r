@@ -1,21 +1,23 @@
 library(Rlda)
 
 pres_matrix = read.csv(
-    "/data/liu/mimic3/CLAMP_NER/single_drug_analysis/FEATURE/PRE_PROCESS/pres_rxnorm_matrix.csv",
+    # "/data/liu/mimic3/CLAMP_NER/single_drug_analysis/FEATURE/PRE_PROCESS/pres_rxnorm_matrix.csv",
+    "/data/liu/mimic3/CLAMP_NER/ner-attribute/output/CONCAT_Results/allepis_newRxNorm.csv",
     row.names=1)
 print("pres_rxnorm matrix:\n")
 print(dim(pres_matrix))
 diag_matrix = read.csv(
-    "/data/liu/mimic3/CLAMP_NER/single_drug_analysis/FEATURE/PRE_PROCESS/diag_matrix.csv",
+    # "/data/liu/mimic3/CLAMP_NER/single_drug_analysis/FEATURE/PRE_PROCESS/diag_matrix.csv",
+    "/data/liu/mimic3/CLAMP_NER/ner-attribute/output/CONCAT_Results/allepis_newCUI.csv",
     row.names=1)
 print("diag matrix:\n")
 print(dim(diag_matrix))
 
 
-res2file <- function(res, n_gibbs, n_community, gamma=0.01,alpha0=0.01,alpha1=0.01,filename = 'pres'){
+res2file <- function(res, n_gibbs, n_community, gamma=0.01,alpha0=0.01,alpha1=0.01,new_flag="NEW",filename = 'pres'){
     # prefix = "/data/liu/LDA/lda_R_result"
     prefix = "/data/liu/mimic3/LDA_MODEL/JOINT_LDA"
-    args = paste(c("ngib",n_gibbs,"_ncomp",n_community,"_gama",gamma,"_alpha",alpha0), collapse = '')
+    args = paste(c(new_flag,"_ngib",n_gibbs,"_ncomp",n_community,"_gama",gamma,"_alpha",alpha0), collapse = '')
     file_path = file.path(prefix,args)
     dir.create(file_path, showWarnings = FALSE)
 
@@ -51,5 +53,7 @@ gamma=0.01
 alpha0=0.01
 alpha1=0.01
 
-res = runlda(pres_matrix,"pres_rxnorm_Full",700,10,gamma,alpha0,alpha1)
-res = runlda(diag_matrix,"diag_Full",700,10,gamma,alpha0,alpha1)
+res = runlda(pres_matrix,"new_rxnorm_Full",700,10,gamma,alpha0,alpha1)
+res = runlda(diag_matrix,"new_cui_Full",700,10,gamma,alpha0,alpha1)
+# res = runlda(pres_matrix,"pres_rxnorm_Full",700,10,gamma,alpha0,alpha1)
+# res = runlda(diag_matrix,"diag_Full",700,10,gamma,alpha0,alpha1)

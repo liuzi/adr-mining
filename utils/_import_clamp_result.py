@@ -4,6 +4,7 @@ from _path import *
 from _tools import *
 import pandas as pd
 import glob
+from os.path import join
 import numpy as np
 
 
@@ -33,7 +34,12 @@ def addidcolumns(file, df):
     for i in range(3):
         df.insert(i, idcols[i], ids[i])
     return df
+'''
+folder_path: path of folder which contains all output results from CLAMP
 
+This function will combine all txt results of all episodes into one pandas dataframe
+and give add three ID columns ['SUBJECT_ID','HADM_ID','GROUP_RANK']
+'''
 def get_df_list(folder_path):
     os.chdir(folder_path)
     files = [f for f in glob.glob("*.txt") if (os.path.isfile(f))]
@@ -91,8 +97,6 @@ def concatcsvs(write=False):
         # print(section_result_map.head())
 
 
-
-
 # HACK: FEATURE 2
 def clean_value(value):
 
@@ -140,6 +144,30 @@ def getdisease(df):
     diseasedf["SNOMEDCT_US"]=diseasedf["SNOMEDCT_US"].apply(lambda x: x[x.find("[")+1:-1])
 
     return diseasedf.drop(columns=["index"])
+
+# TODO: get diseases from full discharge summary
+concat_dissum_clamp_path=join(clamp_output_prefix,"CONCAT_Results", "DISSUM_all_results_from_clamp_nerattribute.csv")
+def concat_all_discharge_summaries_into_df():
+    concat_dissum_clamp_df = get_df_list(join(clamp_output_prefix,"discharge_summary"))
+    write2file(concat_dissum_clamp_df, concat_dissum_clamp_path)
+    return concat_dissum_clamp_df
+    # print("Shape of concat results of dissum terms extraction:%s"%(concat_dissum_clamp_df.shape))
+    # print("Number of patients: %d"%(len(concat_dissum_clamp_df["SUBJECT_ID"].unique())))
+    # print("Number of episodes: %d"%(len(concat_dissum_clamp_df["HADM_ID"].unique())))
+
+def get_disease_from_dissum():
+    if(os.path.exists(concat_dissum_clamp_path)):
+        concat_dissum_clamp_df = read_data(concat_dissum_clamp_path, dtype=str)
+    else:
+        concat_dissum_clamp_df = concat_all_discharge_summaries_into_df()
+    print("Shape of concat results of dissum terms extraction:%s"%str(concat_dissum_clamp_df.shape))
+    print("Number of patients: %d"%(len(concat_dissum_clamp_df["SUBJECT_ID"].unique())))
+    print("Number of episodes: %d"%(len(concat_dissum_clamp_df["HADM_ID"].unique())))
+    disease_df = getdisease(concat_dissum_clamp_df)
+    drug_df = getdrug(concat_dissum_clamp_df)
+    write2file(disease_df, join(clamp_output_prefix,"DISSUM_ALL_Diseases"))
+    write2file(drug_df,join(clamp_output_prefix,"DISSUM_ALL_Drugs"))
+
 
 def extract_items():
     read_dtype={"HADM_ID":str, "GROUP_RANK":str,"SUBJECT_ID":str}
@@ -392,6 +420,7 @@ if __name__=='__main__':
 
     extract_items()
 
+    get_disease_drug_all_dissum_clamp()
 
     # get_allitems_across_sections()
     # get_matrix_from_dissum()

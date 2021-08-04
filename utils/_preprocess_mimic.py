@@ -8,6 +8,7 @@ from os.path import join
 import sys
 sys.path.append(os.path.abspath('/home/liu/project/adr-mining'))
 from term_process.mapping_dataset import get_mrconso_icd9_cui_df
+from _path import singledrug_featurepreprocess_prefix
 
 def to_datetime(pd_col,date_format="%Y-%m-%d %H:%M:%S"):
     return pd.to_datetime(pd_col,format=date_format)
@@ -76,6 +77,36 @@ def get_demographic_df():
 
 #     measure_filter_df = measurements_df.dropna(subset=[value])
 #     return measure_filter_df
+# TODO: get pres_rxnorm_df
+def get_pres_rxnorm_df():
+    # NOTE: 
+    pres_rxnorm_df=read_data(join(singledrug_featurepreprocess_prefix,'pres_rxnorm_df'),dtype=str)
+    print(len(pres_rxnorm_df["NDC"].unique()))
+    print(len(pres_rxnorm_df.dropna(subset=['RxNorm'])["NDC"].unique()))
+    '''
+    # FIXME: modify for creating pres_rxnorm_df, orginial codes in S2 Extract ADE tables with discharge summaries.ipynb
+    '''
+    # ## Transform NDC TO RXNORM FOR FULL prescription table
+    # ## all prescriptions for patients who are administrated the drug
+    # ## get original full prescription table from MIMIC III
+    # ndc_cui_map = read_data(join(processed_map_prefix,"rxnorm_ndc_df"),
+    #                         dtype={"CODE":str})[['CUI_CODE','CODE']].drop_duplicates()
+    # # ndc_cui_map.head()
+    # write2file(ndc_cui_map,join(ade_related_prefix,"ndc_cui_map"))
+
+
+    # ndc_cui_map = read_data(join(ade_related_prefix,"ndc_cui_map"),dtype={'CODE':str,'CUI_CODE':str})
+    # # ndc_cui_map = ndc_cui_map.set_index('CODE').to_dict()
+
+    # ndc_cui_map = ndc_cui_map.set_index('CODE')['CUI_CODE'].to_dict()
+
+
+    # pres_df=read_data(join(read_prefix,'PRESCRIPTIONS'),dtype={'SUBJECT_ID':str,'HADM_ID':str,'NDC':str},\
+    #                 usecols=['SUBJECT_ID','HADM_ID','NDC']).dropna(subset=['NDC'])
+    # pres_df=pres_df[pres_df['NDC']!='0']
+
+    # pres_df['RxNorm']=pres_df['NDC'].apply(lambda x: ndc_cui_map.get(x, None))
+    write2file(pres_df,join(ade_related_prefix,"pres_df"))
 
 
 def get_labmatrix(min_nulls=0.8):
@@ -105,7 +136,8 @@ def get_labmatrix(min_nulls=0.8):
 
     # Groupby label
     measure_label = raw_measurements.groupby(item_id)
-
+    discrete_count=0
+    continuous_count=0
     for label, label_df in measure_label:
 
         null_percentage = labels_nulls[label] * 1.0 / len(label_df)
@@ -113,7 +145,7 @@ def get_labmatrix(min_nulls=0.8):
         if (null_percentage < min_nulls):
             # pick one iteration of continuous label
             label_df = label_df.dropna(subset=[valuenum])
-
+            continuous_count=continuous_count+1
             missed_users = set(user_list) - set(label_df[userid].unique())
             label_df_agg = label_df.groupby(userid)[valuenum].agg(stc_ls)
 
@@ -126,6 +158,7 @@ def get_labmatrix(min_nulls=0.8):
         else:
             # pick one iteration of discrete label
 #                 label_df = label_df.dropna(subset=[value])
+            discrete_count=discrete_count+1
             missed_users = set(user_list) - set(label_df[userid].unique())
             label_df_agg = label_df.groupby([userid, value])[item_id].agg(['count'])
             label_df_agg_per = label_df_agg.groupby(level=0).apply(lambda x: 100 * x / float(x.sum()))
@@ -145,7 +178,7 @@ def get_labmatrix(min_nulls=0.8):
     user_final_vectors = user_vectors_notna.fillna(user_vectors_notna.mean())
     
     user_final_vectors = user_final_vectors.rename_axis('HADM_ID').reset_index()
-    user_final_vectors['HADM_ID'] = df['HADM_ID'].apply(int)
+    user_final_vectors['HADM_ID'] = user_final_vectors['HADM_ID'].apply(int)
     # write2file(user_final_vectors, self.write_path('labtest_uservectors'))    
     write2file(user_final_vectors, join(singledrug_featurepreprocess_prefix,'lab_matrix'))
 
@@ -174,7 +207,8 @@ def get_diagmatrix():
     diag_df = read_data(join(
         read_prefix,"DIAGNOSES_ICD"),
         dtype=read_dtype).dropna(subset=["ICD9_CODE"])    
-    diag_df=diag_df.assign(CUI=diag_df["ICD9_CODE"].apply(icd9_cui_dict.get))    
+    diag_df=diag_df.assign(CUI=diag_df["ICD9_CODE"].apply(icd9_cui_dict.get))
+
     # print(diag_df.head())
     print("Rows in DIAGNOSES_ICD with ICD9s absent in D_ICD_DIAGNOSES")
     diag_df_nullcui=diag_df[diag_df["CUI"].isna()]
@@ -188,6 +222,8 @@ def get_diagmatrix():
     diag_matrix = df2matrix(
         diag_df[["SUBJECT_ID","HADM_ID","CUI"]].drop_duplicates())
     write2file(diag_matrix,join(singledrug_featurepreprocess_prefix,"diag_matrix"))
+
+
 
 # def create_fivedata_repre128(self):
     
@@ -221,5 +257,6 @@ def get_diagmatrix():
 #     write2file(self.df2matrix(procedure_df) ,join(self.preprocess_folder,"procedure_matrix"))
 
 # get_demographic_df()
-# get_labmatrix()
-get_diagmatrix()
+get_labmatrix()
+# get_diagmatrix()
+# get_pres_rxnorm_df()

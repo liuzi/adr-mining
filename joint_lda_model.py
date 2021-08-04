@@ -11,6 +11,7 @@ import ast
 from utils._path import singledrug_featurepreprocess_prefix, concat_clamp_prefix
 from utils._tools import read_data, left_join, write2file, inner_join, append_csv_byrow, append_csv_bydf
 import subprocess
+from term_process.umls_api import search_rxnorm, get_side_effects_cui, search_cid_for_rxnorm
 
 
 import seaborn as sns
@@ -23,9 +24,38 @@ import matplotlib.pyplot as plt
 # write_prefix = "/data/liu/LDA"
 # res_prefix = "/data/liu/LDA/lda_result"
 # res_r_prefix = "/data/liu/LDA/lda_R_result/"
+def name_for_rxnorm(rxnorm):
+    return search_rxnorm(rxnorm).split(" ")[0]
+
 joint_lda_prefix="/data/liu/mimic3/LDA_MODEL/JOINT_LDA"
 charac_prefix="/data/liu/mimic3/CLAMP_NER/single_drug_analysis/FEATURE/PRE_PROCESS"
 n2c2_prefix="/data/liu/mimic3/N2C2/"
+cluster_stats_prefix="/data/liu/mimic3/LDA_MODEL/JOINT_LDA/cluster_stats"
+# top_10_drug={'854236': 'CID100000143', '1791232': 'CID100003075', '198148': 'CID100004900', '854239': 'CID100000160', '855346': 'CID105001396', '237205': 'CID100000085', '854232': 'CID100000137','854242': 'CID100000085', '855290': 'CID105001396', '854253': 'CID100000085'}
+# 855290
+# Coumadin
+# 966571
+# Hydralazine
+# 1659151
+# Zosyn
+# 854242
+# Lovenox
+# 198148
+# Predisone
+# 1791232
+# Diltiazem
+# 237205
+# Nitroglycerine
+# top_10_drug={'1791232': 'CID100003075', '855290': 'CID105001396', '854239': 'CID100000160', '854242': 'CID100000085', '237205': 'CID100000085'}
+# selected_drugs=[*top_10_drug]
+# for drug in selected_drugs:
+#     print(drug)
+#     print(name_for_rxnorm(drug))
+selected_drugs=['855290', '966571', '1659151', '854242', '198148', '1791232','237205'] 
+# selected_drugs=['966571', '866924', '1807516', '1658259', '855290', \
+#     '1808219', '213169', '1659151', '885257', '836358', '1719291'] 
+selected_drug_names=list(map(name_for_rxnorm, selected_drugs))
+
 
 
 ### Option: Get top columns of original matrix, only run for one time
@@ -49,29 +79,6 @@ def df_top_col(matrix, sparse_list, top_drug_list,top_percentage=0.2):
     final_list = list(set(filter_list).union(set(remain)))
     return matrix.iloc[:, final_list]
 
-def load_diag_and_pres_matrix():
-    diag_matrix, pres_matrix = [
-        read_data(join(singledrug_featurepreprocess_prefix,file_name)).head(20) for file_name\
-            in ["diag_matrix","pres_rxnorm_matrix"]
-    ]
-    return diag_matrix, pres_matrix
-
-def get_top_drug_list(top_num=10):
-    # TODO:
-        ## Only run for the first time for geting top N NDCs in SIDER4
-    # top10_NDC_ade = ade_df.groupby('NDC')['ICD9_CODE'].count().reset_index(name='count').sort_values(['count'], ascending=False).head(10)
-    # top10_NDCs = top10_NDC_ade['NDC']
-    # write2file(top10_NDC_ade,join(write_prefix,'top10_NDC_ade'))
-
-
-    ## Get top NDC, top columns should include these NDCs regardless of their frequency
-    # top10_NDC_ade = read_data(join(write_prefix,'top10_NDC_ade'),dtype={'NDC':str})
-    # top10_NDCs = top10_NDC_ade['NDC']
-    # top10_NDC_indexes = get_top_index(pres_matrix,top10_NDCs)
-    # top10_NDC_indexes
-
-    top_drug_list=""
-    return top_drug_list
 
 def run_lda_py(pres_matrix, diag_matrix, pres_n_comp=5,diag_n_comp=5):
     lda = LatentDirichletAllocation(n_components=pres_n_comp, random_state=2019)
@@ -86,25 +93,11 @@ def run_lda_py(pres_matrix, diag_matrix, pres_n_comp=5,diag_n_comp=5):
     
     return pres_Z, pres_Y, diag_Z, diag_Y
 
-def get_filterd_diag_and_pres_matrix(diag_matrix, pres_matrix, top_percentage=0.2):
-    ## Calculating sparsity
-    print("Sparsity of diagnosis matrix: %f"%get_sparsity(diag_matrix))
-    print("Sparsity of prescriptions matrix: %f"%get_sparsity(pres_matrix))
-    diag_sparse = col_sparse(diag_matrix)
-    pres_sparse = col_sparse(pres_matrix)
-
-    ## Only get columns which are top N least sparse
-    top_drug_list=get_top_drug_list()
-
-    diag_matrix_filtered = df_top_col(diag_matrix,diag_sparse,[])
-    pres_matrix_filtered = df_top_col(pres_matrix,pres_sparse,top_drug_list)
-    return diag_matrix_filtered ,pres_matrix_filtered
 
 def run_rlda():
     subprocess.call ("/home/liu/anaconda3/bin/Rscript --vanilla ./rlda_model.r", shell=True)
 
-
-def get_ditance(pres_theta, diag_theta):   
+def get_distance(pres_theta, diag_theta):   
     pres_n_comp=pres_theta.shape[1]
     diag_n_comp=diag_theta.shape[1] 
 
@@ -132,6 +125,8 @@ def get_ditance(pres_theta, diag_theta):
 
     return pd.DataFrame(dis_array,columns=columns,index=index)
 
+
+ 
 # TODO: Get statistics for 10 clusters:
 
 def load_demographics():
@@ -165,13 +160,59 @@ def plot_death_age(theta_patient_label, demographic_df, write_prefix, data_name=
     grid.fig.savefig(join(joint_lda_prefix,write_prefix,"%s_AGE_DEATH_EACH_CLUSTER.png"%data_name))
 
 
+def sum_presPhi(pres_Y, n_digits=4):
+    
+    # columns = ["drug_%d"%(r) for r in list(range(R))]
+    index = ["PRES_CLUSTER_%d"%(n) for n in list(range(pres_Y.shape[0]))]
+    # index_dict=dict(zip(list(range(pres_Y.shape[1])), index))
+    presY_top_sum = pres_Y.loc[:,selected_drugs]
+    presY_top_sum = presY_top_sum.assign(
+        index=index
+    ).set_index("index")
+    presY_top_sum['sum'] = np.sum(presY_top_sum,axis=1).round(n_digits)
+    presY_top_sum['std'] = np.std(presY_top_sum.iloc[:,:-1],axis=1).round(n_digits)
+
+    presY_top_sum['drug_set'] = [(',').join([selected_drugs[i] for i in np.argwhere(ll>np.mean(ll)).flatten()]) 
+                                 for ll in pres_Y.loc[:,selected_drugs].values]
+    return presY_top_sum
+
+def get_predict_top_diag(diag_phi, feature_index,topN):
+    all_CUIs=diag_phi.columns
+    diag_Y = diag_phi.values
+    current_feature = diag_Y[feature_index]
+    mean = np.mean(current_feature)
+    top_diag_indices = current_feature.argsort()[-topN:][::-1]
+    select_CUIs = [all_CUIs[i] for i in top_diag_indices]
+    return select_CUIs
+
+def import_phi(args="ngib700_ncomp10_gama0.01_alpha0.01"):
+    pres_phi_df=read_data(join(joint_lda_prefix,args,"pres_rxnorm_Full_phi.csv"))
+    diag_phi_df=read_data(join(joint_lda_prefix,args,"diag_Full_phi.csv"))
+
+    pres_phi_df.columns=[col[1:] for col in pres_phi_df.columns]
+    # for i,rxnorm in enumerate(selected_drugs):
+    #     if(rxnorm in pres_phi_df.columns):
+    #         print(i,rxnorm)
+    # print(pres_phi_df.loc[:,selected_drugs])
+    # quit()
+    return sum_presPhi(pres_phi_df), diag_phi_df
+
+
 def import_theta(args="ngib700_ncomp10_gama0.01_alpha0.01"):
-    diag_epis_df=read_data(
-        join(singledrug_featurepreprocess_prefix,"diag_matrix"),
-        usecols=["HADM_ID"],dtype=str)
-    pres_epis_df=read_data(
-        join(singledrug_featurepreprocess_prefix,"pres_rxnorm_matrix"),
-        usecols=["HADM_ID"],dtype=str)
+    if("new" in args):
+        diag_epis_df=read_data(
+            join(concat_clamp_prefix,"allepis_newCUI"),
+            usecols=["HADM_ID"],dtype=str)
+        pres_epis_df=read_data(
+            join(concat_clamp_prefix,"allepis_newRxNorm"),
+            usecols=["HADM_ID"],dtype=str)
+    else:
+        diag_epis_df=read_data(
+            join(singledrug_featurepreprocess_prefix,"diag_matrix"),
+            usecols=["HADM_ID"],dtype=str)
+        pres_epis_df=read_data(
+            join(singledrug_featurepreprocess_prefix,"pres_rxnorm_matrix"),
+            usecols=["HADM_ID"],dtype=str)
     # NOTE: Original diagdf and presdf (49955,) (58925,) 
     diag_theta_df=read_data(join(joint_lda_prefix,args,"diag_Full_theta.csv"))
     diag_theta_df.index=list(diag_epis_df["HADM_ID"])
@@ -189,6 +230,188 @@ def import_theta(args="ngib700_ncomp10_gama0.01_alpha0.01"):
         .idxmax(axis="columns").to_frame(name="LABEL").rename_axis('HADM_ID').reset_index()
     
     return pres_theta_df, diag_theta_df, pres_theta_patient_label, diag_theta_patient_label
+
+
+def get_validation(folder_path="ngib700_ncomp10_gama0.01_alpha0.01", n_top_disease=30, union=True):
+    pres_theta, diag_theta, \
+        _, _ = import_theta(folder_path)
+    pres_diag_dis=get_distance(pres_theta, diag_theta)
+    pres_diag_dis_link=pres_diag_dis.\
+        idxmin(axis="columns").to_frame(name="DIAG_CLUSTER").rename_axis('PRES_CLUSTER').reset_index()
+    # print(pres_diag_dis_link)
+    pre_min_diag_int=[int(s.split('_')[-1]) for s in pres_diag_dis_link["DIAG_CLUSTER"]]
+    # print(pre_min_diag_int)
+    # quit()
+    # print(pres_diag_dis_link["DIAG_CLUSTER"])
+    pres_phi_sum, diag_phi = import_phi(folder_path)
+    len_true_ade=[]
+    l=[]
+    drug_set_list=pres_phi_sum["drug_set"].to_list()
+
+    for i in range(pres_phi_sum.shape[0]):
+        drugs = drug_set_list[i].split(",")
+        predict_disease = get_predict_top_diag(diag_phi,pre_min_diag_int[i],n_top_disease)
+        selected_ades = [get_side_effects_cui(rxnorm)["CUI"] for rxnorm in drugs]
+        # print(selected_ades)            
+        if(union==False):
+            #intersection of each drug in a drug set
+            actual_CUIs = set.intersection(*[set(selected_ade) for selected_ade in selected_ades])
+        else: 
+            actual_CUIs = set.union(*[set(selected_ade) for selected_ade in selected_ades])
+
+        len_true_ade=len_true_ade+[len(actual_CUIs)]
+        matched_disease = set(predict_disease).intersection(set(actual_CUIs))
+        precision = len(matched_disease)/len(predict_disease)*100
+        if(len(actual_CUIs)>0):
+            recall = (len(matched_disease)/len(actual_CUIs)*100)
+        else: recall=0            
+        l = l +[precision, recall]
+
+    valid_df = pd.DataFrame(np.reshape(l,[pres_phi_sum.shape[0],-1]),
+                            index=["PRES_CLUSTER_%d"% i for i in list(range(pres_phi_sum.shape[0]))],
+                            columns=["precision%","recall%"]).round(2)
+
+    valid_df.insert(loc=0, column='closest_diag_c', value=pres_diag_dis_link["DIAG_CLUSTER"].to_list())
+    valid_df.insert(loc=1, column='drug_set', value=[\
+        (", ").join([name_for_rxnorm(rxnorm) for rxnorm in dd.split(",")]) for dd in drug_set_list])
+    valid_df.insert(loc=2, column='len(true_ade)', value=len_true_ade)
+    write2file(valid_df.reset_index(), join(joint_lda_prefix,folder_path,"join_lda_valid.csv"))
+    # print(valid_df)
+    # return valid_df
+
+# get_validation("new_ngib700_ncomp10_gama0.01_alpha0.01")
+
+def get_diag_pres_df(new_flag=True):
+    if(new_flag):
+        diag_epis_df=read_data(
+            join(concat_clamp_prefix,"allepis_newCUI"),
+            dtype={"HADM_ID":str})
+        pres_epis_df=read_data(
+            join(concat_clamp_prefix,"allepis_newRxNorm"),
+            dtype={"HADM_ID":str})
+    else:
+        diag_epis_df=read_data(
+            join(singledrug_featurepreprocess_prefix,"diag_matrix"),
+            dtype={"HADM_ID":str})
+        pres_epis_df=read_data(
+            join(singledrug_featurepreprocess_prefix,"pres_rxnorm_matrix"),
+            dtype={"HADM_ID":str})
+    return [df.set_index("HADM_ID") for df in [diag_epis_df, pres_epis_df]]
+    # return diag_epis_df, pres_epis_df
+
+# diag_epis_df, pres_epis_df = get_diag_pres_df(False)
+# print(diag_epis_df.shape)
+# print(pres_epis_df.shape)
+# quit()
+
+# NOTE: Two baseline model. Model one, frequency-based
+def frequency_based_model(topn=30, union=True, n_digits=4,args="ngib700_ncomp10_gama0.01_alpha0.01"):
+    diag_matrix, pres_full_df = get_diag_pres_df(False)
+    pres_phi_sum,_=import_phi(args=args)
+    drug_set_list = pres_phi_sum["drug_set"].to_list()
+
+    l=[]
+    for drug_string in drug_set_list:
+        drugs=drug_string.split(",")
+        print("drug set: {}".format(drugs))
+        res=[]
+        pres_df=pres_full_df.loc[:,drugs]
+        pres_df['prod'] = pres_df.prod(axis=1)
+        # print(pres_df[pres_df["prod"]==1])
+        # print(pres_df.head())
+        all_index = pres_df.index
+        treat_index = pres_df[pres_df['prod']==1].index
+        # print(treat_index[:30])
+        # print(pres_df[pres_df['prod']==1].head())
+
+        control_index = list(set(all_index)-set(treat_index))
+        # print(control_index[:30])
+        # print(treat_index)
+        # print(control_index)
+        treat_diag=diag_matrix.reindex(treat_index).agg('mean').fillna(0)
+        control_diag=diag_matrix.reindex(control_index).agg('mean').fillna(0)
+        compare_diag = treat_diag-control_diag
+        # print(treat_diag)
+        # print(control_diag)
+        # print(compare_diag)
+        predict_ade = compare_diag[compare_diag>0].sort_values(ascending=False).index
+        print("length of predict ade: %d"%(len(predict_ade)))
+        # selected_ades = ade_df[ade_df['NDC'].isin(ndc_list)]
+        selected_ades = [get_side_effects_cui(rxnorm)["CUI"] for rxnorm in drugs]      
+        if(union==False):
+            #intersection of each drug in a drug set
+            actual_CUIs = set.intersection(*[set(selected_ade) for selected_ade in selected_ades])
+        else: 
+            actual_CUIs = set.union(*[set(selected_ade) for selected_ade in selected_ades])
+
+        true_ade_len = len(actual_CUIs)
+        
+        res=res+[(',').join([name_for_rxnorm(rxnorm) for rxnorm in drugs]), len(treat_index), true_ade_len]
+        # for topn in topNs:
+        predict_ade_top = predict_ade[:topn]
+        true_positive = set(predict_ade_top).intersection(actual_CUIs)
+
+        if(len(true_positive)==0):
+            res=res+[0,0]
+        else:
+            precision = round(len(true_positive)/len(predict_ade_top)*100,n_digits)
+            recall = round(len(true_positive)/true_ade_len*100,n_digits)
+            res=res+[precision, recall]
+
+        l = l + res
+    
+    l_df = pd.DataFrame(np.reshape(l,[-1,len(res)]),\
+                    columns=['drug_set','num(treated_patient)','len(true_ade)']+['precision%','recall%'])
+    write2file(l_df, join(joint_lda_prefix,args,"baseline1_valid.csv"))
+    return l_df
+
+# l_df = frequency_based_model(args="ngib700_ncomp10_gama0.01_alpha0.01")
+# print(l_df)
+# res, len_res=frequency_based_model()
+# print(res)
+
+def get_top_10_drugs(top_drug_num=20):
+# 855290
+# Coumadin
+# 966571
+# Hydralazine
+# 1659151
+# Zosyn
+# 854242
+# Lovenox
+# 198148
+# Predisone
+    topn=800
+    newpres_epis_df=read_data(
+        join(concat_clamp_prefix,"allepis_newRxNorm"),
+        dtype={"HADM_ID":str}).set_index("HADM_ID")
+    common_drugs=set(selected_drugs).intersection(set(newpres_epis_df.columns))
+    newpres_epis_df_sum = newpres_epis_df\
+        .sum(axis=0).sort_values(ascending=False)[:topn]\
+            .index.values.tolist()
+    # print(newpres_epis_df_sum[:800][-1])
+    # quit()
+    pres_epis_df=read_data(
+        join(singledrug_featurepreprocess_prefix,"pres_rxnorm_matrix"),
+        dtype={"HADM_ID":str}).set_index("HADM_ID")
+    pres_epis_df_sum = pres_epis_df.sum(axis=0)\
+        .sort_values(ascending=False)[:topn]\
+            .index.values.tolist()
+    # print(pres_epis_df_sum[:2000][-1])
+    common_drugs=set(newpres_epis_df_sum).intersection(set(pres_epis_df_sum))
+    print(len(common_drugs))
+    # quit()
+    top_10_drug={}
+    for drug in common_drugs:
+        drug_cid=search_cid_for_rxnorm(drug)
+        if(drug_cid):
+            top_10_drug[drug]=drug_cid
+        if(len(top_10_drug)>top_drug_num):
+            break
+    print(top_10_drug)
+
+    # print([search_cid_for_rxnorm(drug) for drug in common_drugs])
+# get_top_10_drugs()
 
 def get_stats_table(theta_demo):
     fields=["LENGTH_STAY","AGE","GENDER","EXPIRE_FLAG"]
@@ -391,26 +614,64 @@ def drop_zeros(df):
     df = df.loc[:, ~(df==0).all(axis=0)]
     return df
 
-def show_newdis_e9(file_path="/data/liu/mimic3/N2C2/n2c2_ade_drug"):       
+def show_dis_newdis_e9():
+
     _, _, \
         pres_theta_patient_label, diag_theta_patient_label = import_theta()
-
+    patient_epis_df=read_data(
+        join(singledrug_featurepreprocess_prefix,"patient_epis_map"),dtype=str
+    ).set_index("HADM_ID")
+    # print(patient_epis_df.head())
+    # quit()
     # TODO: New diseases E9codes
-    new_disease_matrix =read_data(join(concat_clamp_prefix,"allepis_newCUI"),dtype={"HADM_ID":str})
+    # NOTE: read newdis and dis matrix
+    # new_disease_matrix =read_data(join(concat_clamp_prefix,"allepis_newCUI"),dtype={"HADM_ID":str})
+    # disease_matrix = read_data(join(singledrug_featurepreprocess_prefix,"diag_matrix"),dtype={"HADM_ID":str})
+    disease_icd9_matrix=read_data(join(
+        singledrug_featurepreprocess_prefix,"original_code","diag_matrix.csv"),
+        dtype={"HADM_ID":str})
+    e9_cols=["HADM_ID"]+[col for col in disease_icd9_matrix.columns if "E9" in col]
+    # print(disease_icd9_matrix[e9_cols])
+    # quit()
+
     for theta_patient_label, dataname in zip(
         [pres_theta_patient_label, diag_theta_patient_label],["PRES","DIAG"]
     ):
-        theta_patient_new_dis = left_join(pres_theta_patient_label,new_disease_matrix,"HADM_ID").dropna()
-        theta_patient_new_dis = drop_zeros(theta_patient_new_dis.set_index(["HADM_ID","LABEL"]))
-        print(theta_patient_new_dis.head())
-    # print(new_disease_matrix.head())
-    # quit()
+        theta_patient_dis = left_join(
+            theta_patient_label,
+            disease_icd9_matrix[e9_cols],"HADM_ID").dropna()
+        theta_patient_dis = drop_zeros(theta_patient_dis.set_index(["HADM_ID"]))
+        theta_dis_df = theta_patient_dis.groupby("LABEL").apply(
+            lambda label_df: len(drop_zeros(\
+                patient_epis_df.reindex(label_df.index.values.tolist())).drop_duplicates())
+        ).reset_index()
+        print(theta_dis_df)
+        write2file(theta_dis_df,join(cluster_stats_prefix,"%s_episodes_count"%(dataname)))
 
+
+        # # NOTE: count of diseases and new diseases
+        # for dis_matrix, dis_flag in zip([
+        #     # new_disease_matrix, 
+        #     disease_matrix],[
+        #         # "NEW_DIS",
+        #         "DIS"]):
+        #     theta_patient_dis = left_join(theta_patient_label,dis_matrix,"HADM_ID").dropna()
+        #     # NOTE: drop zero row or column
+        #     # theta_patient_new_dis = drop_zeros(theta_patient_new_dis.set_index(["HADM_ID","LABEL"]))
+        #     theta_patient_dis = drop_zeros(theta_patient_dis.set_index(["HADM_ID"]))
+        #     theta_dis_df = theta_patient_dis.groupby("LABEL").apply(
+        #         lambda label_df: len(drop_zeros(label_df).columns)
+        #     ).reset_index()
+        #     write2file(theta_dis_df,join(cluster_stats_prefix,"%s_%s_count"%(dataname,dis_flag)))
+
+
+
+# run_rlda()
 # get_stats_of_ldacluster()
 # get_newitems_of_ldacluster()
 # get_n2c2_ades()
 # show_n2c2_ades()
-show_newdis_e9()
+show_dis_newdis_e9()
 
 
 
