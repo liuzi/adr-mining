@@ -915,6 +915,8 @@ def concat_plot_disease_sider(drug_folders=None,get_top_epis=False, dis_item="DI
         drug_folders=list(filter(
             lambda file:re.match("[0-9]{3,}",file),os.listdir(matrix_path)))
         drug_folders=list(map(lambda x: x.split('.')[0],drug_folders))
+    # print(drug_folders)
+    # quit()
 
     # feature ="pres_diag_sider_matrix"
     for drug_rxnorm in drug_folders:
@@ -953,8 +955,8 @@ def concat_plot_disease_sider(drug_folders=None,get_top_epis=False, dis_item="DI
         write2file(pres_diag_sider_X_topdis,join(result_path,"pres_%s_sider_top_%d_%s")%(dis_item,top_num,epis_field))
 
 
-    pres_diag_sider_Y_percentage_df=pres_diag_sider_Y_sum_df.copy()
-    pres_diag_sider_Y_percentage_df.iloc[:,1]=pres_diag_sider_Y_percentage_df.iloc[:,1].value_counts(normalize=True) * 100
+    # pres_diag_sider_Y_percentage_df=pres_diag_sider_Y_sum_df.copy()
+    # pres_diag_sider_Y_percentage_df.iloc[:,1]=pres_diag_sider_Y_percentage_df.iloc[:,1].value_counts(normalize=True) * 100
     pres_diag_sider_Y_sqrt_df=pres_diag_sider_Y_sum_df.copy()
     pres_diag_sider_Y_sqrt_df.iloc[:,1]=pres_diag_sider_Y_sqrt_df.iloc[:,1].apply(np.sqrt)
     
@@ -1065,12 +1067,88 @@ def load_save_name_db():
         
         write2file(item_name_db,join(singledrug_prefix,item_name_file))
     
+def get_all_distance_ade(write_flag=False):
+
+    feature_dict={"dissum_autoencoder":"EN","five_autoencoder":"ES","pres_diag_sider_matrix":"DS"}
+    entity_dict={"DRUG":"D","NEW_DRUG":"ND","DISEASE":"S","NEW_DISEASE":"NS"}
+    distance_dict={"N_DISTANCE":"N","M_DISTANCE":"M","Q_DISTANCE":"Q"}
+    os.chdir(singledrug_prefix)
+    dirs = [f for f in glob.glob(r"[0-9]*") if (os.path.isdir(f))]
+    df_list=[]
+    for rxnorm_id in dirs:
+        drug_folder=join(singledrug_prefix, rxnorm_id)
+        rxnorm_dis_list=[]
+        ade_list=get_side_effects_cui(rxnorm_id)
+        sde_dict={}
+        for feature in feature_dict.keys():
+            distance_df=read_data(
+                join(drug_folder,feature,"CLUSTER_DISTANCE_C2")
+            ).set_index("ITEMS")
+            # dis_cols=["%s_%s_%s"%(entity,feature,distance) for ]
+            # print(distance_df.head())
+            # print(distance_df.set_index("ITEMS").values.flatten())
+            distance_df=distance_df.stack().reset_index()\
+                .rename(columns={0: rxnorm_id})
+            # print(distance_df.columns)
+            distance_df["COL"]=distance_df.apply(
+                lambda x: ("_").join(
+                    [   
+                        entity_dict[x.ITEMS], 
+                        feature_dict[feature],
+                        distance_dict[x.level_1]]),axis=1
+            )
+            
+            new_dis_file=list(filter(
+                lambda file:all([word in file for word in ["COMBINED","new_diseases"]]),
+                os.listdir(join(drug_folder,feature))
+            ))[0]
+            dis_file=list(filter(
+                lambda file:all([word in file for word in ["COMBINED","diseases"]]),
+                os.listdir(join(drug_folder,feature))
+            ))[0]
+            for dis_file, ifnewdis in zip([new_dis_file, dis_file],["NS","S"]):
+                dis_df=read_data(join(drug_folder,feature,dis_file))
+                dis_unique_df=dis_df.query("Common == False")
+                for df, un_flag in zip([dis_df, dis_unique_df],["CM","UN"]):
+                    c0_ades=set(df.query("Cluster_0 > 0")["CUI"]).intersection(set(ade_list["CUI"]))
+                    c1_ades=set(df.query("Cluster_1 > 0")["CUI"]).intersection(set(ade_list["CUI"]))
+                    c_both_ades=c0_ades.union(c1_ades)
+                    keys=[
+                        ("_").join([feature_dict[feature],ifnewdis,un_flag,c_flag]) 
+                        for c_flag in ["C0","C1","CBOTH"]]
+                    for key, value in zip(keys, [c0_ades,c1_ades,c_both_ades]):
+                        sde_dict[key]=len(value)
+            # print(sde_dict)
+            rxnorm_dis_list=rxnorm_dis_list+[distance_df.set_index("COL")[[rxnorm_id]]]
+        # print(sde_dict)
+        # quit()
+        # distance_one_col=pd.concat(rxnorm_dis_list,axis=0)
+        sde_dict["SIDER"]=len(ade_list)
+        rxnorm_dis_list=rxnorm_dis_list+[pd.DataFrame({rxnorm_id:sde_dict})]
+        # print(pd.concat(rxnorm_dis_list,axis=0))
+        df_list=df_list+[pd.concat(rxnorm_dis_list,axis=0)]
+    distance_num_sde=pd.concat(df_list,axis=1).T.rename_axis('RXNORM').reset_index()
+    
+    if(write_flag):
+        write2file(distance_num_sde,join(singledrug_prefix,"distance_num_sde.csv"))
+    return distance_num_sde
+    # get_side_effects_cui(drug_rxnorm)
+        # quit()
+            # print(distance_df)
+        
+    # print(pd.concat(df_list,axis=1))
 
 import itertools
 if __name__ == '__main__':
-    doc_drugs=["1658259","866924","966571","885257","836358","855334",\
-        "855290","1808219","1724383","1719291","1807516","213169","1659151"]
-        
+    # get_all_distance_ade()
+    # concat_plot_disease_sider()
+
+    # ##STEP:0  define 13 drug rxnorms
+    # doc_drugs=["1658259","866924","966571","885257","836358","855334",\
+    #     "855290","1808219","1724383","1719291","1807516","213169","1659151"]
+    doc_drugs=['966571', '866924', '1807516', '1658259', '855290', \
+        '1808219', '213169', '1659151', '885257', '836358', '1719291']   
+
     # print("START: %s"%(datetime.today().strftime('%Y-%m-%d-%H:%M:%S')))
     # ##STEP:1 load code_name files for drugs, diseases and new diseases
     # load_save_name_db()
@@ -1091,12 +1169,15 @@ if __name__ == '__main__':
 
     ##STEP:6 check disease-sider intersection on two drugs
     # -----------------------------------------------------------------
-    ## one drug for disease
+    # one drug for disease
     # doc_drugs=[[rxnorm] for rxnorm in doc_drugs]
     # fc = feature_creation('NONE')
+    # fc.extra_two_drugs_anaylsis(doc_drugs,not_new_dis=False)
+    # NOTE: if for disease, not new diseases
     # fc.extra_two_drugs_anaylsis(doc_drugs,not_new_dis=True)
-    # concat_plot_disease_sider(get_top_epis=False, dis_item="DISEASE_CUI", \
-    #     matrix_path=join(dis_sider_intersection_path, "SINGLE_DRUG_DISEASE_CUI"))
+
+    concat_plot_disease_sider(get_top_epis=False, dis_item="DISEASE_CUI", \
+        matrix_path=join(dis_sider_intersection_path, "SINGLE_DRUG_New_DISEASE_CUI"))
     # -----------------------------------------------------------------
     # top_10_pairs_list=[["1658259","866924"],["1658259","1808219"],["1658259","885257"],["866924","885257"],\
     #     ["866924","1808219"],["1658259","836358"],["866924","966571"],["1658259","966571"],["866924","836358"],["1658259","1724383"]]
@@ -1234,14 +1315,15 @@ if __name__ == '__main__':
     # rxnorm_id="866924"
     # group_newdis=[["C0008031","C0039231","C0013404"],["C0008031", "C0476273","C0039231"]]
     # #NOTE:vancomycin
-    rxnorm_id="1807516"
-    group_newdis_unique=[["C0002871","C0039231","C0015967","C0013404"],[]]
-    group_newdis=[["C0002871","C0039231"],["C0428977"]]
-    feature_flag="ES"
+    # rxnorm_id="1807516"
+    # group_newdis_unique=[["C0002871","C0039231","C0015967","C0013404"],[]]
+    # group_newdis=[["C0002871","C0039231"],["C0428977"]]
+    # feature_flag="ES"
 
-    fc = feature_creation(rxnorm_id)
-    fc.get_dissumary_drug_feature_newdis(feature_flag ,group_newdis_unique,True)
-    fc.get_dissumary_drug_feature_newdis(feature_flag,group_newdis)
+    # fc = feature_creation(rxnorm_id)
+    # fc.get_dissumary_drug_feature_newdis(feature_flag ,group_newdis_unique,True)
+    # fc.get_dissumary_drug_feature_newdis(feature_flag,group_newdis)
+    # #NOTE:vancomycin------------------------------------------------------
 
 
 # def main():
