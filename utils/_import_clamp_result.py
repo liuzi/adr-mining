@@ -155,7 +155,7 @@ def concat_all_discharge_summaries_into_df():
     # print("Number of patients: %d"%(len(concat_dissum_clamp_df["SUBJECT_ID"].unique())))
     # print("Number of episodes: %d"%(len(concat_dissum_clamp_df["HADM_ID"].unique())))
 
-def get_disease_from_dissum():
+def get_disease_drug_all_dissum_clamp():
     if(os.path.exists(concat_dissum_clamp_path)):
         concat_dissum_clamp_df = read_data(concat_dissum_clamp_path, dtype=str)
     else:
